@@ -1,0 +1,8 @@
+{
+  "name": "CoachIQ",
+  "description": "Cricket coaching, match analytics, drills library, and personalized training plans desk",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

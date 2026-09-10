@@ -1,0 +1,48 @@
+name: Deployment validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  application:
+    name: Application checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm build:vercel
+      - name: Verify the Vercel API entry security contract
+        run: |
+          pnpm exec esbuild api/index.ts --platform=node --packages=external --bundle --format=esm --outdir=.provider-check
+          node scripts/vercel-entry-e2e.mjs
+
+  aws-container:
+    name: AWS container contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the AWS-ready image
+        run: docker build -f Dockerfile.aws -t coachiq:ci .
+      - name: Verify the port and SPA routes
+        run: |
+          docker run -d --name coachiq-ci -p 8080:8080 coachiq:ci
+          cleanup() { docker logs coachiq-ci || true; docker rm -f coachiq-ci || true; }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:8080/ > /dev/null; then break; fi
+            sleep 1
+          done
+          for route in / /app /privacy /terms /admin; do
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:8080${route}")
+            test "$status" = "200"
+          done
