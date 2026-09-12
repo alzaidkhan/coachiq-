@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowRight, ArrowUpRight, BarChart3, BrainCircuit, CalendarDays, ChevronDown, ChevronRight, CircleCheck, Dumbbell, Menu, NotebookPen, Play, Sparkles, Target, Utensils, X } from "lucide-react";
 import { COACHIQ_APP_ROUTE } from "../lib/landing";
-import { handleAssetImageError } from "../lib/media";
+import { handleAssetImageError, ASSET_IMAGES } from "../lib/media";
 import { portableAssets } from "../lib/portableAssets";
 import { FeedbackModal } from "../components/FeedbackModal";
 
 const COACHIQ_MARK = portableAssets.mark;
-const COACHIQ_HERO = portableAssets.hero;
+const COACHIQ_HERO = ASSET_IMAGES.hero;
 const LANDING_VIDEO_URL = (import.meta.env.VITE_LANDING_VIDEO_URL || "").trim();
 
 const navItems = [

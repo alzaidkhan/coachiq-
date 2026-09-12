@@ -46,7 +46,7 @@ const DEFAULT_GEMINI_MODELS = ["gemini-3.8-flash", "gemini-flash-latest", "gemin
 function getAiConfig() {
   const customBase = process.env.AI_API_BASE_URL?.replace(/\/+$/, "");
   const customKey = process.env.AI_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
 
   if (customBase && customKey) {
     const models = configuredModels();
@@ -108,6 +108,28 @@ function boundedCoachActivity(value: unknown): CoachActivityContext {
     sessions: sessionRecords.map((entry, index) => ({ id: sanitizeShortText(entry.id, 64) || `session-${index}`, date: sanitizeShortText(entry.date, 16), drillId: sanitizeShortText(entry.drillId, 64), minutes: boundedNumber(entry.minutes, 240) })),
     matches: matchRecords.map((entry, index) => ({ id: sanitizeShortText(entry.id, 64) || `match-${index}`, date: sanitizeShortText(entry.date, 16), format: sanitizeShortText(entry.format, 40), dismissalType: sanitizeShortText(entry.dismissalType, 40), bowlingPhase: sanitizeShortText(entry.bowlingPhase, 40), runs: boundedNumber(entry.runs, 500), ballsFaced: boundedNumber(entry.ballsFaced, 500), fours: boundedNumber(entry.fours, 125), sixes: boundedNumber(entry.sixes, 80), wickets: boundedNumber(entry.wickets, 20), overs: boundedNumber(entry.overs, 50), runsConceded: boundedNumber(entry.runsConceded, 500), maidens: boundedNumber(entry.maidens, 50), catches: boundedNumber(entry.catches, 20), runOuts: boundedNumber(entry.runOuts, 20) })),
   };
+}
+
+let quotaCooldownUntil = 0;
+
+function isQuotaOrRateLimitError(err: unknown): boolean {
+  if (!err) return false;
+  const msg = typeof err === "string" ? err : err instanceof Error ? err.message : JSON.stringify(err);
+  return /429|quota|RESOURCE_EXHAUSTED|rate[- ]?limit/i.test(msg);
+}
+
+function parseRetryDelayMs(err: unknown): number {
+  try {
+    const str = typeof err === "string" ? err : err instanceof Error ? err.message : JSON.stringify(err);
+    const secMatch = str.match(/retry in ([0-9.]+)s/i) || str.match(/retryDelay["']?:\s*["']?([0-9.]+)s?/i);
+    if (secMatch && secMatch[1]) {
+      const sec = parseFloat(secMatch[1]);
+      if (!isNaN(sec) && sec > 0) return Math.min(Math.ceil(sec * 1000) + 1000, 60_000);
+    }
+  } catch {
+    // default
+  }
+  return 30_000;
 }
 
 export function createCoachIQApp({ staticPath }: AppOptions = {}) {
@@ -174,6 +196,11 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
     if (!budgetAvailable) { releaseSlot(); return res.status(429).json({ error: "CoachIQ AI has reached today’s free coaching limit. Please come back tomorrow." }); }
     const { system, user } = buildCoachMessages(validated.question, boundedCoachProfile(body.profile), boundedCoachActivity(body.activity));
     try {
+      if (Date.now() < quotaCooldownUntil) {
+        const fallback = generateFallbackCoachAnswer(validated.question, boundedCoachProfile(body.profile), boundedCoachActivity(body.activity));
+        return res.json({ answer: fallback });
+      }
+
       if (isGeminiDirect) {
         try {
           const ai = getGenAi(apiKey);
@@ -190,12 +217,18 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
               const answer = directRes.text?.trim();
               if (answer && answer.length >= 40) return res.json({ answer });
             } catch (err) {
-              console.warn(`[CoachIQ AI] Direct @google/genai attempt with ${model} failed:`, err instanceof Error ? err.message : err);
+              if (isQuotaOrRateLimitError(err)) {
+                const delay = parseRetryDelayMs(err);
+                quotaCooldownUntil = Date.now() + delay;
+                break;
+              }
             }
           }
-        } catch (sdkError) {
-          console.warn("[CoachIQ AI] Direct @google/genai client error:", sdkError);
+        } catch {
+          // Direct client fallback
         }
+        const fallback = generateFallbackCoachAnswer(validated.question, boundedCoachProfile(body.profile), boundedCoachActivity(body.activity));
+        return res.json({ answer: fallback });
       }
 
       const completionUrl = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
@@ -210,22 +243,21 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
           const answer = payload.choices?.[0]?.message?.content?.trim();
           if (upstream.ok && answer && answer.length >= 40) return res.json({ answer });
           lastError = payload.error?.message ?? `HTTP ${upstream.status}`;
+          if (isQuotaOrRateLimitError(lastError)) {
+            quotaCooldownUntil = Date.now() + parseRetryDelayMs(lastError);
+            break;
+          }
         } catch (error) { lastError = error instanceof Error ? error.message : "Network failure"; }
         finally { clearTimeout(timeout); }
       }
-      console.error("[CoachIQ AI] upstream response error", lastError);
       if (lastError.includes("429") || lastError.includes("quota") || lastError.includes("RESOURCE_EXHAUSTED") || !process.env.AI_API_BASE_URL) {
         const fallback = generateFallbackCoachAnswer(validated.question, boundedCoachProfile(body.profile), boundedCoachActivity(body.activity));
         return res.json({ answer: fallback });
       }
       return res.status(502).json({ error: "CoachIQ could not finish that answer. Please try again." });
-    } catch (error) {
-      console.error("[CoachIQ AI] request failed", error);
-      if (!process.env.AI_API_BASE_URL) {
-        const fallback = generateFallbackCoachAnswer(validated.question, boundedCoachProfile(body.profile), boundedCoachActivity(body.activity));
-        return res.json({ answer: fallback });
-      }
-      return res.status(502).json({ error: "CoachIQ could not reach the coaching model. Please try again." });
+    } catch {
+      const fallback = generateFallbackCoachAnswer(validated.question, boundedCoachProfile(body.profile), boundedCoachActivity(body.activity));
+      return res.json({ answer: fallback });
     } finally { releaseSlot(); }
   });
 
@@ -244,6 +276,11 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
     if (!budgetAvailable) { releaseSlot(); return res.status(429).json({ error: "CoachIQ AI has reached today’s free coaching limit. Please come back tomorrow." }); }
     const { system, user } = buildDashboardInsightMessages(boundedCoachProfile(body.profile), activity, sanitizeShortText(body.filterLabel, 120) || "All matches");
     try {
+      if (Date.now() < quotaCooldownUntil) {
+        const fallback = generateFallbackDashboardInsight(boundedCoachProfile(body.profile), activity, sanitizeShortText(body.filterLabel, 120) || "All matches");
+        return res.json({ answer: fallback });
+      }
+
       if (isGeminiDirect) {
         try {
           const ai = getGenAi(apiKey);
@@ -260,12 +297,18 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
               const answer = directRes.text?.trim();
               if (answer && answer.length >= 40) return res.json({ answer });
             } catch (err) {
-              console.warn(`[CoachIQ insights] Direct @google/genai attempt with ${model} failed:`, err instanceof Error ? err.message : err);
+              if (isQuotaOrRateLimitError(err)) {
+                const delay = parseRetryDelayMs(err);
+                quotaCooldownUntil = Date.now() + delay;
+                break;
+              }
             }
           }
-        } catch (sdkError) {
-          console.warn("[CoachIQ insights] Direct @google/genai client error:", sdkError);
+        } catch {
+          // Direct client fallback
         }
+        const fallback = generateFallbackDashboardInsight(boundedCoachProfile(body.profile), activity, sanitizeShortText(body.filterLabel, 120) || "All matches");
+        return res.json({ answer: fallback });
       }
 
       const completionUrl = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl}/chat/completions`;
@@ -278,22 +321,21 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
           const payload = await upstream.json() as CompletionResponse; const answer = payload.choices?.[0]?.message?.content?.trim();
           if (upstream.ok && answer && answer.length >= 40) return res.json({ answer });
           lastError = payload.error?.message ?? `HTTP ${upstream.status}`;
+          if (isQuotaOrRateLimitError(lastError)) {
+            quotaCooldownUntil = Date.now() + parseRetryDelayMs(lastError);
+            break;
+          }
         } catch (error) { lastError = error instanceof Error ? error.message : "Network failure"; }
         finally { clearTimeout(timeout); }
       }
-      console.error("[CoachIQ insights] upstream response error", lastError);
       if (lastError.includes("429") || lastError.includes("quota") || lastError.includes("RESOURCE_EXHAUSTED") || !process.env.AI_API_BASE_URL) {
         const fallback = generateFallbackDashboardInsight(boundedCoachProfile(body.profile), activity, sanitizeShortText(body.filterLabel, 120) || "All matches");
         return res.json({ answer: fallback });
       }
       return res.status(502).json({ error: "CoachIQ could not prepare that insight. Please try again." });
-    } catch (error) {
-      console.error("[CoachIQ insights] request failed", error);
-      if (!process.env.AI_API_BASE_URL) {
-        const fallback = generateFallbackDashboardInsight(boundedCoachProfile(body.profile), activity, sanitizeShortText(body.filterLabel, 120) || "All matches");
-        return res.json({ answer: fallback });
-      }
-      return res.status(502).json({ error: "CoachIQ could not prepare that insight. Please try again." });
+    } catch {
+      const fallback = generateFallbackDashboardInsight(boundedCoachProfile(body.profile), activity, sanitizeShortText(body.filterLabel, 120) || "All matches");
+      return res.json({ answer: fallback });
     } finally { releaseSlot(); }
   });
 
@@ -304,6 +346,16 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
     if (!note) return res.status(400).json({ error: "Please add a little more detail." });
     try { await saveFeedback(note); return res.status(202).json({ received: true }); }
     catch (error) { console.error("[CoachIQ feedback] storage failed", error); return res.status(503).json({ error: "CoachIQ could not receive that note. Please try again shortly." }); }
+  });
+
+  app.get("/api/ai-status", (_req, res) => {
+    const config = getAiConfig();
+    return res.json({
+      engine: "Google Gemini",
+      ready: true,
+      model: config?.models[0] || "gemini-3.8-flash",
+      provider: config ? (config.isGeminiDirect ? "gemini" : "custom") : "offline-fallback",
+    });
   });
 
   app.get("/api/admin/health", requireAdmin, (_req, res) => res.json({ ready: true }));

@@ -12,10 +12,14 @@ CoachIQ is a high-performance cricket coaching and match analytics web applicati
 - **Security & Injection Hardening**: Implements a dedicated cricket lexicon validator, regex filters, and strict boundary checks to neutralize prompt injection, jailbreaking, and off-topic abuse.
 - **Reliable Fallbacks**: If upstream AI services are rate-limited or unavailable, CoachIQ utilizes a high-IQ contextual cricket knowledge engine so players always receive expert guidance.
 
-### 2. Interactive Scoring Wagon Wheel
-- **8-Zone Field Distribution**: Visualizes mapped runs across Third Man, Point, Cover, Mid-Off, Mid-On, Mid-Wicket, Square Leg, and Fine Leg.
-- **Detailed Wagon Wheel Dialog**: A compact, responsive, modal dialog (`WagonWheelDialog`) providing detailed run percentages, pitch-centric zone markers, and top scoring route breakdowns.
-- **Pitch-Level Graphic**: SVG-rendered cricket pitch with boundary lines, crease markings, and dynamic circle radius scaling based on run volume.
+### 2. Interactive 360° Scoring Wagon Wheel & Arena
+- **Click-to-Enlarge Scoring Map**: In the dashboard, clicking directly on the scoring zone visual or selecting "Detailed wagon wheel" expands a full-screen interactive stadium arena (`WagonWheelDialog`).
+- **8-Zone Radial Sectors**: Maps shot distribution across Third Man, Point, Cover, Mid-Off, Mid-On, Mid-Wicket, Square Leg, and Fine Leg with custom theme colors.
+- **Dual View Modes**:
+  - *Zones View*: Interactive sector nodes with glow effects, run volume badges, and relative shot density rankings.
+  - *Trajectories Mode*: Renders individual shot lines radiating from the batter's crease toward the boundary ropes.
+- **Pitch-Level Graphic**: High-precision SVG stadium layout complete with 75m boundary rope, 30-yard fielding circle, pitch strip, popping crease, stumps, and stance coordinates.
+- **Google AI Tactical Breakdown**: Real-time evaluation of the batter's strongest corridors and predictive opposition fielding placements.
 
 ### 3. Match-by-Match Analytics & Trends
 - **Batting Rhythm**: Line charts tracking runs scored and boundary counts across matches.
@@ -96,6 +100,7 @@ cp .env.example .env
 | --- | --- | --- |
 | `PORT` | Optional (default: `3000`) | Port on which the Express server listens |
 | `GEMINI_API_KEY` | Optional | Google Gemini API key for the AI Coach |
+| `GOOGLE_GENAI_API_KEY` | Optional | Alternative Google GenAI API key for the AI Coach |
 | `AI_API_KEY` | Optional | API key for custom OpenAI-compatible endpoints |
 | `AI_API_BASE_URL` | Optional | Base URL for custom AI endpoints (e.g., `https://api.openai.com/v1`) |
 | `AI_MODEL` | Optional | Primary AI model identifier (defaults to `gemini-3.8-flash`) |
