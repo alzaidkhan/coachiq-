@@ -2,7 +2,8 @@ import type { SyntheticEvent } from "react";
 import { portableAssets } from "./portableAssets";
 import { avatarPresets } from "./avatarPresets";
 
-import heroImg from "../../../src/assets/images/regenerated_image_1789206212792.jpg";
+import heroImg from "../../../src/assets/images/regenerated_image_1789193092905.jpg";
+import nutritionImg from "../../../src/assets/images/regenerated_image_1789205455108.jpg";
 import battingDrillImg from "../../../src/assets/images/regenerated_image_1789137357882.png";
 import bowlingDrillImg from "../../../src/assets/images/regenerated_image_1789137368036.jpg";
 import recoveryDrillImg from "../../../src/assets/images/regenerated_image_1789137376807.png";
@@ -25,7 +26,7 @@ export const ASSET_IMAGES = {
   batting: battingDrillImg,
   bowling: bowlingDrillImg,
   recovery: recoveryDrillImg,
-  nutrition: portableAssets.nutrition,
+  nutrition: nutritionImg,
   todayFocus: heroImg,
 } as const;
 
@@ -36,7 +37,7 @@ const fallbackAssets: Record<AssetKind, string> = {
   batting: battingDrillImg,
   bowling: bowlingDrillImg,
   recovery: recoveryDrillImg,
-  nutrition: portableAssets.nutrition,
+  nutrition: nutritionImg,
   matchInsight: heroImg,
   todayFocus: heroImg,
   avatar: avatarPresets[0].url,

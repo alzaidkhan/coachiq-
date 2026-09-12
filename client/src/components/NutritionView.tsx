@@ -25,7 +25,7 @@ import {
   type DetailedMeal,
   type FoodPortion,
 } from "../lib/nutritionEngine";
-import { handleAssetImageError } from "../lib/media";
+import { ASSET_IMAGES, handleAssetImageError } from "../lib/media";
 import { portableAssets } from "../lib/portableAssets";
 
 export interface Profile {
@@ -102,7 +102,7 @@ export function NutritionView({ profile, onUpdateMetrics }: NutritionViewProps) 
       <section className="paper-card overflow-hidden">
         <div className="relative h-56 sm:h-64">
           <img
-            src={portableAssets.nutrition}
+            src={ASSET_IMAGES.nutrition}
             alt="Cricket sports conditioning & athletic fueling"
             className="h-full w-full object-cover"
             onError={(e) => handleAssetImageError(e, "nutrition")}
@@ -523,18 +523,33 @@ export function NutritionView({ profile, onUpdateMetrics }: NutritionViewProps) 
               </span>
               <div className="space-y-1.5">
                 <strong className="block text-xs font-bold uppercase tracking-[0.1em] text-[#37443a]">
-                  Nutrition & Sports Conditioning Disclaimer
+                  Important Dietary Advisory
                 </strong>
-                <p className="leading-relaxed text-[#6f675e]">
-                  The meal plans, ingredient weights (in grams), macronutrient distributions, and caloric targets presented in CoachIQ are algorithmic athletic estimations generated based on your self-reported height, body mass, playing role, and training frequency. They are provided solely for sports conditioning education and general fitness optimization. They do not constitute certified medical, clinical, or individualized dietetic advice, diagnosis, or treatment.
-                </p>
-                <p className="leading-relaxed text-[#6f675e]">
-                  Individual metabolic rates, digestive sensitivities, gastrointestinal tolerances, and nutrient absorption vary. Always consult a licensed sports dietitian, physician, or qualified medical professional before making significant alterations to your dietary intake or hydration regimen, particularly if you have underlying medical conditions, metabolic disorders, food allergies, or specific medication interactions.
+                <p className="leading-relaxed text-[#5e564c]">
+                  This meal plan is created based on the information provided. Please consult a certified dietician or sports nutritionist for a proper diet tailored to your individual health requirements.
                 </p>
               </div>
             </div>
           </footer>
         </>
+      )}
+
+      {!hasBodyMetrics && (
+        <footer className="mt-4 rounded-2xl border border-[#e5dcd2] bg-[#fbf8f4] p-5 text-xs text-[#7d756d]">
+          <div className="flex items-start gap-3.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#fff0e7] text-[#b45124]">
+              <AlertCircle size={18} />
+            </span>
+            <div className="space-y-1.5">
+              <strong className="block text-xs font-bold uppercase tracking-[0.1em] text-[#37443a]">
+                Important Dietary Advisory
+              </strong>
+              <p className="leading-relaxed text-[#6f675e]">
+                These plans are created based on the information provided. Please consult a certified dietician for a proper, comprehensive diet tailored to your individual athletic needs.
+              </p>
+            </div>
+          </div>
+        </footer>
       )}
     </div>
   );
