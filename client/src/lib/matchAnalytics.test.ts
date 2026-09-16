@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bowlingPhasePerformance, dismissalTrend, scoringZonePerformance } from "./matchAnalytics";
+import { bowlingPhasePerformance, dismissalTrend } from "./matchAnalytics";
 
 describe("CoachIQ filtered match analytics", () => {
   const selectedMatches = [
@@ -20,13 +20,6 @@ describe("CoachIQ filtered match analytics", () => {
     expect(bowlingPhasePerformance(selectedMatches)).toEqual([
       { name: "Powerplay", wickets: 3, economy: 6.5, overs: "4.0" },
       { name: "Death", wickets: 2, economy: 9, overs: "4.0" },
-    ]);
-  });
-
-  it("builds a scoring-zone view from only the supplied match rows", () => {
-    expect(scoringZonePerformance([{ overs: 0, wickets: 0, runsConceded: 0, scoringZones: { cover: 12, longOn: 6 } }, { overs: 0, wickets: 0, runsConceded: 0, scoringZones: { cover: 4 } }])).toEqual([
-      { id: "longOn", label: "Long on", x: 64, y: 87, runs: 6 },
-      { id: "cover", label: "Cover", x: 12, y: 62, runs: 16 },
     ]);
   });
 });

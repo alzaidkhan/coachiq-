@@ -34,10 +34,11 @@ import { portableAssets } from "../lib/portableAssets";
 import { normalizeOvers } from "../lib/cricketStats";
 import { durationToSeconds, formatCountdown, sessionProgress } from "../lib/drillSession";
 import { clearCoachIQData, getBrowserStorage, parseImportedCoachIQData, readCoachIQData, writeCoachIQData } from "../lib/localData";
-import { normalizeBowlingSpells, normalizeScoringZones, spellTotals, type BowlingSpell, type ScoringZones } from "../lib/matchModel";
+import { normalizeBowlingSpells, spellTotals, type BowlingSpell } from "../lib/matchModel";
 import { availabilityChanged, completeMovedEntry, isDayReset, moveCollides, shouldConfirmFinalSkip } from "../lib/weeklyPlan";
 import { ProfilePhotoModal } from "../components/ProfilePhotoModal";
 import { NutritionView } from "../components/NutritionView";
+import { CardSkeleton } from "../components/SkeletonLoader";
 import { checkHasBodyMetrics } from "../lib/nutritionEngine";
 
 const AICoachView = lazy(() => import("../components/CricketAddons").then((module) => ({ default: module.AICoachView })));
@@ -76,7 +77,6 @@ type MatchLog = {
   format?: string;
   dismissalType?: string;
   bowlingPhase?: string;
-  scoringZones?: ScoringZones;
   bowlingSpells?: BowlingSpell[];
   runs: number;
   ballsFaced: number;
@@ -227,7 +227,6 @@ function normalizeActivity(value: unknown): ActivityLog {
       format: typeof match.format === "string" ? match.format : undefined,
       dismissalType: typeof match.dismissalType === "string" ? match.dismissalType : undefined,
       bowlingPhase,
-      scoringZones: normalizeScoringZones(match.scoringZones),
       bowlingSpells,
       runs: number(typeof match.runs === "number" || typeof match.runs === "string" ? match.runs : 0),
       ballsFaced: number(typeof match.ballsFaced === "number" || typeof match.ballsFaced === "string" ? match.ballsFaced : 0),
@@ -530,8 +529,8 @@ export default function Home() {
         {view === "plan" && <><PlanView profile={profile} plan={planWithFocus} today={today} schedule={schedule} onUpdate={updateSchedule} onStart={startDrill} /><PlanFocusRationale note={profile.improvementNote} /></>}
         {view === "drills" && <EnhancedDrillDiscovery profile={profile} completedIds={todayCompleted} onToggle={toggleDrill} onStart={startDrill} />}
         {view === "nutrition" && <NutritionView profile={profile} onUpdateMetrics={handleUpdateMetrics} />}
-        {view === "coach" && <Suspense fallback={<div className="paper-card grid min-h-56 place-items-center p-6 text-sm font-semibold text-[#746d66]">Loading your coaching tools…</div>}><AICoachView profile={profile} activity={activity} /></Suspense>}
-        {view === "progress" && <Suspense fallback={<div className="paper-card grid min-h-56 place-items-center p-6 text-sm font-semibold text-[#746d66]">Loading your dashboard…</div>}><DashboardView profile={profile} activity={activity} onAddMatch={openNewMatch} onEditMatch={(match) => { setEditingMatch(match); setShowMatchForm(true); }} onDeleteMatch={deleteMatch} /></Suspense>}
+        {view === "coach" && <Suspense fallback={<CardSkeleton title="Loading AI Coach…" />}><AICoachView profile={profile} activity={activity} /></Suspense>}
+        {view === "progress" && <Suspense fallback={<CardSkeleton title="Loading Dashboard…" />}><DashboardView profile={profile} activity={activity} onAddMatch={openNewMatch} onEditMatch={(match) => { setEditingMatch(match); setShowMatchForm(true); }} onDeleteMatch={deleteMatch} /></Suspense>}
         {view === "profile" && <><ProfileView draft={draft} setDraft={setDraft} onSave={saveProfile} onOpenPhotoModal={() => setShowPhotoModal(true)} /><DataControls onExport={exportData} onImport={importData} onReset={resetData} storageAvailable={storageAvailable} /></>}
       </div>
     </main>

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { PageSkeleton } from "./components/SkeletonLoader";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 const Home = lazy(() => import("./pages/Home"));
@@ -14,7 +15,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 function Router() {
   return (
-    <Suspense fallback={<main className="grid min-h-screen place-items-center bg-[#f6f2ec] text-sm font-semibold text-[#4b554d]">Loading CoachIQ…</main>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Switch>
         <Route path="/" component={Landing} />
         <Route path="/app" component={Home} />

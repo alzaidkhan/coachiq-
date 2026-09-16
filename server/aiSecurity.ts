@@ -4,24 +4,67 @@ export const AI_MAX_CONCURRENT_REQUESTS = 2;
 
 type WindowEntry = { startedAt: number[] };
 
+export type RateLimitResult = {
+  allowed: boolean;
+  limit: number;
+  remaining: number;
+  retryAfterSeconds: number;
+  resetTimeMs: number;
+};
+
 export class SlidingWindowLimiter {
   private readonly entries = new Map<string, WindowEntry>();
 
   constructor(private readonly limit: number, private readonly windowMs: number) {}
 
-  take(key: string, now = Date.now()) {
+  take(key: string, now = Date.now()): RateLimitResult {
     const existing = this.entries.get(key)?.startedAt ?? [];
     const active = existing.filter((timestamp) => now - timestamp < this.windowMs);
+    const resetTimeMs = active.length > 0 ? active[0] + this.windowMs : now + this.windowMs;
+
     if (active.length >= this.limit) {
       this.entries.set(key, { startedAt: active });
-      const retryAfterSeconds = Math.max(1, Math.ceil((this.windowMs - (now - active[0])) / 1000));
-      return { allowed: false, remaining: 0, retryAfterSeconds };
+      const retryAfterSeconds = Math.max(1, Math.ceil((resetTimeMs - now) / 1000));
+      return {
+        allowed: false,
+        limit: this.limit,
+        remaining: 0,
+        retryAfterSeconds,
+        resetTimeMs,
+      };
     }
+
     active.push(now);
     this.entries.set(key, { startedAt: active });
-    return { allowed: true, remaining: this.limit - active.length, retryAfterSeconds: 0 };
+    const retryAfterSeconds = 0;
+    return {
+      allowed: true,
+      limit: this.limit,
+      remaining: Math.max(0, this.limit - active.length),
+      retryAfterSeconds,
+      resetTimeMs,
+    };
+  }
+
+  applyHeaders(res: { setHeader(name: string, value: string): void }, rate: RateLimitResult): void {
+    res.setHeader("X-RateLimit-Limit", String(rate.limit));
+    res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+    res.setHeader("X-RateLimit-Reset", String(Math.ceil(rate.resetTimeMs / 1000)));
+    if (!rate.allowed) {
+      res.setHeader("Retry-After", String(rate.retryAfterSeconds));
+    }
   }
 }
+
+export function extractClientIp(req: { ip?: string; socket?: { remoteAddress?: string }; headers?: Record<string, unknown> }): string {
+  const forwarded = req.headers?.["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    const firstIp = forwarded.split(",")[0].trim();
+    if (firstIp) return firstIp;
+  }
+  return req.ip || req.socket?.remoteAddress || "127.0.0.1";
+}
+
 
 let activeAiRequests = 0;
 

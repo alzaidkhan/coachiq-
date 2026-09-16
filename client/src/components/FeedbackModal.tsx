@@ -22,12 +22,22 @@ export function FeedbackModal({ onClose }: { onClose: () => void }) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     const note = message.trim();
-    if (note.length < 8) { setError("Please add a little more detail so we can understand your note."); return; }
+    if (note.length < 8) {
+      setError("Please add at least 8 characters so we can understand your note.");
+      return;
+    }
     setStatus("submitting");
     setError("");
     try {
-      const response = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, message: note, source: "public-launch" }) });
-      if (!response.ok) throw new Error("CoachIQ could not receive that note.");
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, message: note, source: "public-launch" }),
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        throw new Error(data?.error || "CoachIQ could not receive that note. Please try again.");
+      }
       setStatus("success");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "CoachIQ could not receive that note.");

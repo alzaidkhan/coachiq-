@@ -1,22 +1,14 @@
 import { ballsToOvers, oversToBalls } from "./cricketStats";
-import { normalizeBowlingSpells, scoringZones, type BowlingSpell, type ScoringZones } from "./matchModel";
+import { normalizeBowlingSpells, type BowlingSpell } from "./matchModel";
 
 export type MatchAnalyticsRow = {
   dismissalType?: string;
   bowlingPhase?: string;
-  scoringZones?: ScoringZones;
   bowlingSpells?: BowlingSpell[];
   overs: number;
   wickets: number;
   runsConceded: number;
 };
-
-export function scoringZonePerformance(matches: MatchAnalyticsRow[]) {
-  return scoringZones.map((zone) => ({
-    ...zone,
-    runs: matches.reduce((total, match) => total + (match.scoringZones?.[zone.id] ?? 0), 0),
-  })).filter((zone) => zone.runs > 0);
-}
 
 const phaseOrder = ["Powerplay", "Middle overs", "Death"];
 

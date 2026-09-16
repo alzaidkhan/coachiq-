@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import { buildCoachMessages, buildDashboardInsightMessages, type CoachActivityContext, type CoachProfileContext } from "../client/src/lib/coachContext";
-import { acquireAiSlot, AI_DAILY_REQUEST_BUDGET, sanitizeShortText, SlidingWindowLimiter, validateCoachQuestion } from "./aiSecurity";
+import { acquireAiSlot, AI_DAILY_REQUEST_BUDGET, extractClientIp, sanitizeShortText, SlidingWindowLimiter, validateCoachQuestion } from "./aiSecurity";
 import { requireAdmin } from "./adminAuth";
 import { parseFeedback } from "./feedback";
 import { deleteFeedback, feedbackStatuses, listFeedback, reserveDailyAiRequest, saveFeedback, setFeedbackStatus } from "./feedbackStore";
@@ -134,10 +134,11 @@ function parseRetryDelayMs(err: unknown): number {
 
 export function createCoachIQApp({ staticPath }: AppOptions = {}) {
   const app = express();
+  const globalApiLimiter = new SlidingWindowLimiter(120, 60 * 1000);
   const coachLimiter = new SlidingWindowLimiter(20, 10 * 60 * 1000);
   const insightLimiter = new SlidingWindowLimiter(15, 10 * 60 * 1000);
-  const feedbackLimiter = new SlidingWindowLimiter(6, 15 * 60 * 1000);
-  const adminLimiter = new SlidingWindowLimiter(15, 10 * 60 * 1000);
+  const feedbackLimiter = new SlidingWindowLimiter(25, 10 * 60 * 1000);
+  const adminLimiter = new SlidingWindowLimiter(12, 10 * 60 * 1000);
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -171,20 +172,36 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
     return next(error);
   });
 
-  const clientKey = (req: express.Request) => req.ip || req.socket.remoteAddress || "unknown";
+  const clientKey = (req: express.Request) => extractClientIp(req);
   const validateId = (value: string) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
+
+  // Global API protection: Protect all /api endpoints from rapid volumetric scans
+  app.use("/api", (req, res, next) => {
+    const rate = globalApiLimiter.take(clientKey(req));
+    if (!rate.allowed) {
+      globalApiLimiter.applyHeaders(res, rate);
+      return res.status(429).json({ error: `Too many API requests from this connection. Please wait ${rate.retryAfterSeconds} seconds.` });
+    }
+    return next();
+  });
 
   app.use("/api/admin", (req, res, next) => {
     const rate = adminLimiter.take(clientKey(req));
     res.setHeader("Cache-Control", "no-store, max-age=0");
-    if (!rate.allowed) { res.setHeader("Retry-After", String(rate.retryAfterSeconds)); return res.status(429).json({ error: `Too many owner-access attempts. Try again in about ${rate.retryAfterSeconds} seconds.` }); }
+    adminLimiter.applyHeaders(res, rate);
+    if (!rate.allowed) {
+      return res.status(429).json({ error: `Too many owner-access attempts. Try again in about ${rate.retryAfterSeconds} seconds.` });
+    }
     return next();
   });
 
   app.post("/api/coach", async (req, res) => {
     const body = req.body as CoachRequest;
     const rate = coachLimiter.take(clientKey(req));
-    if (!rate.allowed) { res.setHeader("Retry-After", String(rate.retryAfterSeconds)); return res.status(429).json({ error: `CoachIQ is taking a short break for this device. Try again in about ${rate.retryAfterSeconds} seconds.` }); }
+    coachLimiter.applyHeaders(res, rate);
+    if (!rate.allowed) {
+      return res.status(429).json({ error: `CoachIQ is taking a short break for this device. Try again in about ${rate.retryAfterSeconds} seconds.` });
+    }
     const validated = validateCoachQuestion(body.question);
     if (!validated.ok) return res.status(400).json({ error: validated.error });
     const releaseSlot = acquireAiSlot();
@@ -264,7 +281,10 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
   app.post("/api/dashboard-insights", async (req, res) => {
     const body = req.body as DashboardInsightRequest;
     const rate = insightLimiter.take(clientKey(req));
-    if (!rate.allowed) { res.setHeader("Retry-After", String(rate.retryAfterSeconds)); return res.status(429).json({ error: `CoachIQ has refreshed insights recently on this device. Try again in about ${rate.retryAfterSeconds} seconds.` }); }
+    insightLimiter.applyHeaders(res, rate);
+    if (!rate.allowed) {
+      return res.status(429).json({ error: `CoachIQ has refreshed insights recently on this device. Try again in about ${rate.retryAfterSeconds} seconds.` });
+    }
     const activity = boundedCoachActivity(body.activity);
     if (!activity.matches?.length) return res.status(400).json({ error: "Add a match in this selected view before requesting an insight." });
     const releaseSlot = acquireAiSlot();
@@ -341,7 +361,10 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
 
   app.post("/api/feedback", async (req, res) => {
     const rate = feedbackLimiter.take(clientKey(req));
-    if (!rate.allowed) { res.setHeader("Retry-After", String(rate.retryAfterSeconds)); return res.status(429).json({ error: `Thanks for the note. Please wait about ${rate.retryAfterSeconds} seconds before sending another.` }); }
+    feedbackLimiter.applyHeaders(res, rate);
+    if (!rate.allowed) {
+      return res.status(429).json({ error: `Thanks for the note. Please wait about ${rate.retryAfterSeconds} seconds before sending another.` });
+    }
     const note = parseFeedback(req.body ?? {});
     if (!note) return res.status(400).json({ error: "Please add a little more detail." });
     try { await saveFeedback(note); return res.status(202).json({ received: true }); }
@@ -358,7 +381,9 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
     });
   });
 
-  app.get("/api/admin/health", requireAdmin, (_req, res) => res.json({ ready: true }));
+  // Owner Authentication & Administration Endpoints
+  app.get("/api/admin/health", requireAdmin, (_req, res) => res.json({ ready: true, authenticated: true }));
+  app.post("/api/admin/auth/verify", requireAdmin, (_req, res) => res.json({ success: true, authenticated: true }));
   app.get("/api/admin/feedback", requireAdmin, async (_req, res) => { try { return res.json({ feedback: await listFeedback() }); } catch (error) { console.error("[CoachIQ admin] feedback list failed", error); return res.status(503).json({ error: "Feedback is temporarily unavailable." }); } });
   app.patch("/api/admin/feedback/:id", requireAdmin, async (req, res) => {
     const id = validateId(req.params.id); const status = typeof req.body?.status === "string" ? req.body.status : "";
@@ -371,8 +396,20 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
   });
 
   if (staticPath) {
-    app.use(express.static(staticPath));
+    app.use(
+      express.static(staticPath, {
+        maxAge: "1d",
+        setHeaders: (res, filePath) => {
+          if (filePath.includes("/assets/")) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          } else {
+            res.setHeader("Cache-Control", "public, max-age=3600");
+          }
+        },
+      })
+    );
     app.get("*", (_req, res) => res.sendFile(path.join(staticPath, "index.html")));
   }
   return app;
 }
+

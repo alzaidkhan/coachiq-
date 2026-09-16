@@ -25,11 +25,18 @@ afterAll(async () => {
 describe("owner access endpoint", () => {
   it("accepts the configured owner access code and rejects missing or invalid codes", async () => {
     const valid = await fetch(`${baseUrl}/api/admin/health`, { headers: { "x-coachiq-admin-key": process.env.COACHIQ_ADMIN_ACCESS_KEY ?? "" } });
+    const bearerValid = await fetch(`${baseUrl}/api/admin/health`, { headers: { Authorization: `Bearer ${process.env.COACHIQ_ADMIN_ACCESS_KEY ?? ""}` } });
     const missing = await fetch(`${baseUrl}/api/admin/health`);
     const invalid = await fetch(`${baseUrl}/api/admin/health`, { headers: { "x-coachiq-admin-key": "wrong-access-code" } });
+    const empty = await fetch(`${baseUrl}/api/admin/health`, { headers: { "x-coachiq-admin-key": "   " } });
+    
     expect(valid.status).toBe(200);
     expect(await valid.json()).toEqual({ ready: true });
+    expect(bearerValid.status).toBe(200);
     expect(missing.status).toBe(401);
+    expect(missing.headers.get("www-authenticate")).toContain("Bearer");
     expect(invalid.status).toBe(401);
+    expect(empty.status).toBe(401);
   });
 });
+

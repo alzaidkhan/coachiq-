@@ -4,9 +4,9 @@ import { avatarPresets } from "./avatarPresets";
 
 import heroImg from "../../../src/assets/images/regenerated_image_1789193092905.jpg";
 import nutritionImg from "../../../src/assets/images/regenerated_image_1789205455108.jpg";
-import battingDrillImg from "../../../src/assets/images/regenerated_image_1789137357882.png";
+import battingDrillImg from "../../../src/assets/images/regenerated_image_1789137357882.jpg";
 import bowlingDrillImg from "../../../src/assets/images/regenerated_image_1789137368036.jpg";
-import recoveryDrillImg from "../../../src/assets/images/regenerated_image_1789137376807.png";
+import recoveryDrillImg from "../../../src/assets/images/regenerated_image_1789137376807.jpg";
 
 export type AssetKind =
   | "brand"

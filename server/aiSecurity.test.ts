@@ -16,5 +16,13 @@ describe("CoachIQ AI security", () => {
     expect(blocked.allowed).toBe(false);
     expect(blocked.retryAfterSeconds).toBeGreaterThan(0);
     expect(limiter.take("player", 60_001).allowed).toBe(true);
+
+    const headers: Record<string, string> = {};
+    const mockRes = { setHeader: (name: string, val: string) => { headers[name] = val; } };
+    limiter.applyHeaders(mockRes, blocked);
+    expect(headers["X-RateLimit-Limit"]).toBe("2");
+    expect(headers["X-RateLimit-Remaining"]).toBe("0");
+    expect(headers["Retry-After"]).toBeDefined();
   });
+
 });
