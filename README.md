@@ -63,34 +63,3 @@ npm run dev
 ```
 
 Visit `http://localhost:3000` in your web browser.
-
----
-
-## Environment Configuration
-
-Configuration is managed through environment variables in your `.env` file (or your hosting provider's configuration dashboard):
-
-| Variable | Required | Description |
-| :--- | :--- | :--- |
-| `GEMINI_API_KEY` | Optional | Google Gemini API key to enable live AI coaching and insight generation. |
-| `COACHIQ_ADMIN_ACCESS_KEY` | Optional | Access key for the feedback administration portal (`/admin`). |
-| `DATABASE_URL` | Optional | MySQL database connection string. If omitted, CoachIQ runs with resilient in-memory storage. |
-| `PORT` | Optional | Server port (defaults to `3000`). |
-
-*Note: If no API key is set, CoachIQ seamlessly provides built-in coaching knowledge and offline analytics.*
-
----
-
-## Available Scripts
-
-- `npm run dev`: Starts the local development server with Vite hot reload.
-- `npm run build`: Compiles the frontend application and bundles the backend server into `dist/`.
-- `npm start`: Starts the production server from `dist/server.cjs`.
-- `npm test`: Runs the automated test suite.
-- `npm run lint`: Checks TypeScript types and project syntax.
-
----
-
-## License
-
-MIT License. Crafted for cricketers and coaches worldwide.
