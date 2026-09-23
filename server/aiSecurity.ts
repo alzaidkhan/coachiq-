@@ -17,7 +17,21 @@ export class SlidingWindowLimiter {
 
   constructor(private readonly limit: number, private readonly windowMs: number) {}
 
+  private prune(now: number) {
+    this.entries.forEach((val: WindowEntry, key: string) => {
+      const active = val.startedAt.filter((t: number) => now - t < this.windowMs);
+      if (active.length === 0) {
+        this.entries.delete(key);
+      } else {
+        this.entries.set(key, { startedAt: active });
+      }
+    });
+  }
+
   take(key: string, now = Date.now()): RateLimitResult {
+    if (this.entries.size > 2000) {
+      this.prune(now);
+    }
     const existing = this.entries.get(key)?.startedAt ?? [];
     const active = existing.filter((timestamp) => now - timestamp < this.windowMs);
     const resetTimeMs = active.length > 0 ? active[0] + this.windowMs : now + this.windowMs;
@@ -59,10 +73,11 @@ export class SlidingWindowLimiter {
 export function extractClientIp(req: { ip?: string; socket?: { remoteAddress?: string }; headers?: Record<string, unknown> }): string {
   const forwarded = req.headers?.["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) {
-    const firstIp = forwarded.split(",")[0].trim();
+    const firstIp = sanitizeShortText(forwarded.split(",")[0].trim(), 64);
     if (firstIp) return firstIp;
   }
-  return req.ip || req.socket?.remoteAddress || "127.0.0.1";
+  const ip = req.ip || req.socket?.remoteAddress || "127.0.0.1";
+  return sanitizeShortText(ip, 64);
 }
 
 

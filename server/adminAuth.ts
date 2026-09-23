@@ -1,10 +1,14 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 
-export const DEFAULT_ADMIN_ACCESS_KEY = "B!nG@077558dAshb0@rD";
-
 function configuredAdminKey(): string {
-  return process.env.COACHIQ_ADMIN_ACCESS_KEY?.trim() || DEFAULT_ADMIN_ACCESS_KEY;
+  return (
+    process.env.COACHIQ_ADMIN_ACCESS_KEY?.trim() ||
+    process.env.ADMIN_ACCESS_KEY?.trim() ||
+    process.env.ADMIN_KEY?.trim() ||
+    process.env.ADMIN_CODE?.trim() ||
+    ""
+  );
 }
 
 function sha256Digest(content: string): Buffer {

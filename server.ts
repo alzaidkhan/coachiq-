@@ -22,10 +22,25 @@ async function startServer() {
     });
   }
 
-  const PORT = 3000;
-  app.listen(PORT, "0.0.0.0", () => {
+  const PORT = Number(process.env.PORT) || 3000;
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
+
+  const shutdown = (signal: string) => {
+    console.log(`[CoachIQ] Received ${signal}, closing server gracefully...`);
+    server.close(() => {
+      console.log("[CoachIQ] HTTP server closed.");
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.error("[CoachIQ] Forcefully shutting down after timeout.");
+      process.exit(1);
+    }, 10_000).unref();
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 startServer().catch((err) => {

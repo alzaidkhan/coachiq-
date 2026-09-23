@@ -175,8 +175,12 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
   const clientKey = (req: express.Request) => extractClientIp(req);
   const validateId = (value: string) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
 
-  // Global API protection: Protect all /api endpoints from rapid volumetric scans
+  // Global API protection: Protect all /api endpoints from rapid volumetric scans and disable caching
   app.use("/api", (req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
     const rate = globalApiLimiter.take(clientKey(req));
     if (!rate.allowed) {
       globalApiLimiter.applyHeaders(res, rate);
@@ -410,6 +414,14 @@ export function createCoachIQApp({ staticPath }: AppOptions = {}) {
     );
     app.get("*", (_req, res) => res.sendFile(path.join(staticPath, "index.html")));
   }
+  // Catch-all sanitized error handler: Prevent unhandled exceptions from exposing stack traces or internals
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("[CoachIQ internal error]:", err instanceof Error ? err.message : err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "An unexpected error occurred. Please try again." });
+    }
+  });
+
   return app;
 }
 
